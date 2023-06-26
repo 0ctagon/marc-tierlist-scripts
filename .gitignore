@@ -170,6 +170,7 @@ cython_debug/
 *.json
 *.htm
 *.xlsx
+*.webm.part
 test/
 saved/
 old_scripts/

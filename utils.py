@@ -9,10 +9,6 @@ import datetime
 import pandas as pd
 from xlsx2html import xlsx2html
 from bs4 import BeautifulSoup
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import calendar
-import seaborn as sns
 
 
 months_to_num = {"Jan":"01",
@@ -522,7 +518,10 @@ def make_html_tables(df, EN=False):
 
 
 ########################################################## PLOTTING ##########################################################
-
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import calendar
+import seaborn as sns
 
 
 def make_timing_plot(df2):
@@ -1030,9 +1029,11 @@ def make_tempo_nsong_streamtype(df):
 
 
 ########################################################## DL ##########################################################
-from pytube import YouTube
-from pytube.cli import on_progress
+# from pytube import YouTube
+# from pytube.cli import on_progress
+from yt_dlp import YoutubeDL
 from pydub import AudioSegment
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, TDRC, TCON, COMM
 
 dl_dir = "streams_dl"
 
@@ -1043,7 +1044,7 @@ def extract_audio_segment(input_file, output_file, start_time, end_time):
     segment.export(output_file, format='mp3')
 
 def format_stream_title(live_title):
-    for c in ["|", ".", "'"]:
+    for c in ["|", ".", "'","/"]:
         live_title = live_title.replace(c, "")
     return live_title
 
@@ -1056,11 +1057,61 @@ def get_twitch_timing(formatted_timing):
     seconds = int(formatted_timing[formatted_timing.index("m")+1:formatted_timing.index("s")])
     return hours*60*60 + minutes*60 + seconds
 
-def download_songs_from_streams(df, stream_titles=[]):
+def get_youtube_timing(URL):
+    timing = URL[URL.index("t=")+2:]
+    try:
+        timing = timing[:timing.index("s")]
+    except:
+        pass
+    return int(timing)
+
+
+def check_timings_bug(timings):
+    if len(timings) == 1: return False
+    else:
+        start_time = timings[-1][0]
+        end_time = timings[-1][1]
+        if end_time <= start_time:
+            return True
+        for timing in timings[:-1]:
+            if timing[1] > end_time:
+                print("########## WARNING ##########")
+            if timing[0] > start_time:
+                return True
+    return False
+
+
+def get_date_for_mp3(htmlID):
+    if len(htmlID) == 7: htmlID = htmlID[1:]
+    else: htmlID = htmlID[1:-1]
+    return f"20{htmlID[:2]}-{htmlID[2:4]}-{htmlID[4:]}"
+
+
+def change_mp3_metadata(mp3_file, title, artist, album, track_number, recording_date, genre, comments=None):
+    audio = ID3(mp3_file)
+
+    # Modify the title metadata
+    audio["TIT2"] = TIT2(encoding=3, text=title)
+    # Modify the artist metadata
+    audio["TPE1"] = TPE1(encoding=3, text=artist)
+    # Modify the album metadata
+    audio["TALB"] = TALB(encoding=3, text=album)
+    # Modify the track number metadata
+    audio["TRCK"] = TRCK(encoding=3, text=track_number)
+    # Modify the recording date metadata
+    audio["TDRC"] = TDRC(encoding=3, text=recording_date)
+    # Modify the genre metadata
+    audio["TCON"] = TCON(encoding=3, text=genre)
+    # Modify the comments metadata
+    if comments is not None: audio["COMM"] = COMM(encoding=3, lang="eng", desc="", text=comments)
+    audio.save()
+
+
+def download_songs_from_streams(df, stream_titles=[], make_songs=True):
     for stream_title in stream_titles:
         df_stream = df.query(f'live_title=="{stream_title}"')
         stream_title = format_stream_title(stream_title)
-        stream_title = f'{get_stream_info(df_stream, "htmlID")} {stream_title}'
+        stream_title = f'{get_stream_info(df_stream, "htmlID")[1:]} {stream_title}'
         stream_dir = f"{dl_dir}/{stream_title}"
         os.makedirs(stream_dir, exist_ok=True)
 
@@ -1073,49 +1124,53 @@ def download_songs_from_streams(df, stream_titles=[]):
         if not os.path.exists(f"{stream_title}.{file_format}"):
             if not os.path.exists(f"{stream_dir}/{stream_title}.{file_format}"):
                 print(f"Start DL {stream_title}.")
-                live_first_url = get_stream_info(df_stream, "URL")
                 if stream_media in ["YouTube", "Live"]: # TODO: Change if Live also on Twitch (soon)
-                    YouTube(live_first_url, on_progress_callback=on_progress).streams.filter(only_audio=True).order_by('abr').desc().first().download(filename=f"{stream_title}.webm")
-                    # If video download (not implemented)
-                    # YouTube(f'http://youtube.com/watch?v={live_code}', on_progress_callback=on_progress).streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first().download()
+                    os.system(f'yt-dlp -f "ba" -o "{stream_title}.webm" --force-overwrites {get_live_code(get_stream_info(df_stream, "URL"))}')
                 else:
                     os.system(f'twitch-dl download {live_first_url} -q audio_only -o "{stream_title}.mkv"')
                 print(f'{stream_title} DL.')
-
-        # No need
-        # if stream_media == "Twitch" and os.path.exists(f"{formatted_stream_title}.{file_format}"):
-        #     print(f'Converting {stream_title} mkv to webm.')
-        #     os.system(f'ffmpeg -i "{stream_title}.mkv"  -vn -c:a libopus -b:a 128k {stream_title}.webm') # TODo: not hardcoded bitrate
 
         if not os.path.exists(f"{stream_dir}/{stream_title}.{file_format}"):
             os.system(f'mv "{stream_title}.{file_format}" "{stream_dir}/{stream_title}.{file_format}"')
             print(f'{stream_title} correctly moved.')
 
         k_song = 0
+        last_end_time = 0
+        timings = []
         print(f'Start downloading songs from {stream_title}.')
+        if not make_songs: continue
         for index, song in df_stream.iterrows():
             k_song+=1
             song_name = f'{k_song}. {df.iloc[index]["name"]}'
             if os.path.exists(f"{stream_dir}/{song_name}.mp3"):
                 print(f'{song_name} skipped.')
                 continue
+            next_song = df.iloc[index+1]
+            # print(f"Song URL: {song.URL}\nSong length [s]: {song.length_DT.seconds}\nNext song URL: {next_song['URL']}\nNext song name: {next_song['name']}")
             try:
                 if stream_media in ["YouTube", "Live"]:
-                    start_time = int(song.URL[song.URL.index("t=")+2:])
+                    start_time = get_youtube_timing(song.URL)
                 else:
                     start_time = get_twitch_timing(song.URL[song.URL.index("t=")+2:])
             except ValueError:
                 start_time = 0
-            next_song = df.iloc[index+1]
             if next_song["name"][0] == "-":
                 if stream_media in ["YouTube", "Live"]:
-                    end_time = int(next_song["URL"][next_song["URL"].index("t=")+2:])
+                    end_time = get_youtube_timing(next_song["URL"])
                 else:
-                    start_time = get_twitch_timing(next_song["URL"][next_song["URL"].index("t=")+2:])
+                    end_time = get_twitch_timing(next_song["URL"][next_song["URL"].index("t=")+2:])
             else:
                 end_time = start_time + song.length_DT.seconds+3
-            # print(song.URL)
+
             print(f"{song_name} - [{start_time} : {end_time}]")
+            timings.append([start_time, end_time])
+            if check_timings_bug(timings):
+                print("Timing bug?")
+                print(f"Song URL: {song.URL}\nSong length [s]: {song.length_DT.seconds}\nNext song URL: {next_song['URL']}\nNext song name: {next_song['name']}")
+                sys.exit()
             extract_audio_segment(f"{stream_dir}/{stream_title}.{file_format}", f"{stream_dir}/{song_name}.mp3", start_time, end_time)
-            print(f"  - DL")
+            change_mp3_metadata(f"{stream_dir}/{song_name}.mp3", df.iloc[index]["name"], "Marc Rebillet", song.live_title, f"{k_song}/{len(df_stream)}", get_date_for_mp3(song.htmlID), song.genre)
+            last_end_time = end_time
+            print("  :)")
+        print(" ::)\n")
     print("Done.")
