@@ -13,4 +13,4 @@ df = get_unique_songID(df)
 
 stream_titles = list(df.drop_duplicates("live_title")["live_title"])
 
-download_songs_from_streams(df, stream_titles=stream_titles)
+download_songs_from_streams(df, stream_titles=stream_titles, make_playlist_rank=[["S"], ["S", "Ap"], ["S", "Ap", "A"]])
