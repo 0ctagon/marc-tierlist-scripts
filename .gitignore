@@ -174,4 +174,4 @@ cython_debug/
 test/
 saved/
 old_scripts/
-
+*.jpg

@@ -1033,7 +1033,10 @@ from pytube import YouTube
 from pytube.cli import on_progress
 from yt_dlp import YoutubeDL
 from pydub import AudioSegment
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, TDRC, TCON, COMM
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, TDRC, TCON, COMM, APIC
+import shlex
+import subprocess
+from pythumb import Thumbnail
 
 dl_dir = "streams_dl"
 
@@ -1087,7 +1090,7 @@ def get_date_for_mp3(htmlID):
     return f"20{htmlID[:2]}-{htmlID[2:4]}-{htmlID[4:]}"
 
 
-def change_mp3_metadata(mp3_file, title, artist, album, track_number, recording_date, genre, comments=None):
+def change_mp3_metadata(mp3_file, title, artist, album, track_number, recording_date, genre, comments=None, image_path=None):
     audio = ID3(mp3_file)
 
     # Modify the title metadata
@@ -1104,6 +1107,12 @@ def change_mp3_metadata(mp3_file, title, artist, album, track_number, recording_
     audio["TCON"] = TCON(encoding=3, text=genre)
     # Modify the comments metadata
     if comments is not None: audio["COMM"] = COMM(encoding=3, lang="eng", desc="", text=comments)
+
+    # Modify the album art metadata
+    if image_path is not None:
+        with open(image_path, 'rb') as album_art:
+            audio["APIC"] = APIC(encoding=3, mime='image/jpeg', type=3, desc=u'Cover', data=album_art.read())
+
     audio.save()
 
 
@@ -1205,3 +1214,65 @@ def download_songs_from_streams(df, stream_titles=[], make_songs=True, make_play
             print("  :)")
         print(" ::)\n")
     print("Done.")
+
+
+
+def dl_thumbnail(df, stream_titles):
+    for stream_title in stream_titles:
+        df_stream = df.query(f'live_title=="{stream_title}"')
+        stream_title = format_stream_title(stream_title)
+        stream_title = f'{get_stream_info(df_stream, "htmlID")[1:]} {stream_title}'
+        stream_dir = f"{dl_dir}/{stream_title}"
+        live_url = get_stream_info(df_stream, "URL")
+        # if not os.path.exists(f"{stream_dir}/{stream_title}.jpg"):
+        if True:
+            print(f"Doing thumbnail {stream_title} {live_url}")
+            if "twitch" in live_url:
+                subprocess.run(["youtube-dl", "--write-thumbnail", "--skip-download", "--output", f"{stream_title}", live_url], check=True)
+            else:
+                continue
+                live_code = get_live_code(live_url)
+                print(live_code)
+                t = Thumbnail(f"https://www.youtube.com/watch?v={live_code}")
+                t.fetch()
+                t.save(f".", filename=stream_title)
+            subprocess.run(f'mv {shlex.quote(f"{stream_title}.jpg")} {shlex.quote(f"{stream_dir}/{stream_title}.jpg")}', shell=True)
+            print(f'{stream_title} thumbnail DL.')
+        else:
+            print(f"{stream_title} thumbnail already downloaded.")
+
+icloud_dir = "mp3_playlists/icloud"
+
+def mv_thumbnail_to_icloud(df, stream_titles):
+    for stream_title in stream_titles:
+        df_stream = df.query(f'live_title=="{stream_title}"')
+        stream_title = format_stream_title(stream_title)
+        stream_title = f'{get_stream_info(df_stream, "htmlID")[1:]} {stream_title}'
+        stream_dir = f"{dl_dir}/{stream_title}"
+        if os.path.exists(f"{stream_dir}/{stream_title}.jpg"):
+            os.system(f'cp "{stream_dir}/{stream_title}.jpg" "{icloud_dir}/thumbnails/{stream_title}.jpg"')
+            print(f"{stream_title} thumbnail moved.")
+        else:
+            print(f"{stream_title} thumbnail not found.")
+
+
+def mv_mp3_to_icloud(df, stream_titles):
+    for stream_title in stream_titles:
+        df_stream = df.query(f'live_title=="{stream_title}"')
+        stream_title = format_stream_title(stream_title)
+        stream_title = f'{get_stream_info(df_stream, "htmlID")[1:]} {stream_title}'
+        stream_dir = f"{dl_dir}/{stream_title}"
+
+        k_song = 0
+        for index, song in df_stream.iterrows():
+            k_song+=1
+            song_name = f'{k_song}. {df.iloc[index]["name"]}'.replace("/","")
+            if os.path.exists(f"{stream_dir}/{song_name}.mp3"):
+                rank = df.iloc[index]["rank"]
+                if rank not in ["S", "A+", "A"]:
+                    continue
+
+                new_song_name = get_stream_info(df_stream, "htmlID")[1:]+" "+" ".join(song_name.split(" ")[1:])
+                os.system(f'cp "/home/tfillinger/Documents/marc/{stream_dir}/{song_name}.mp3" "{icloud_dir}/{new_song_name}.mp3"')
+                change_mp3_metadata(f"{icloud_dir}/{new_song_name}.mp3", df.iloc[index]["name"], f"Marc Rebillet; tier {rank}", song.live_title, f"{k_song}/{len(df_stream)}", get_date_for_mp3(song.htmlID), song.genre, image_path=f"{icloud_dir}/thumbnails/{stream_title}.jpg")
+                print(f'Added {icloud_dir}/{new_song_name}.mp3.')

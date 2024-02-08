@@ -13,4 +13,7 @@ df = get_unique_songID(df)
 
 stream_titles = list(df.drop_duplicates("live_title")["live_title"])
 
-download_songs_from_streams(df, stream_titles=stream_titles, make_playlist_rank=[["S"], ["S", "Ap"], ["S", "Ap", "A"]])
+# download_songs_from_streams(df, stream_titles=stream_titles, make_playlist_rank=[["S"], ["S", "Ap"], ["S", "Ap", "A"]])
+# dl_thumbnail(df, stream_titles=stream_titles)
+# mv_thumbnail_to_icloud(df, stream_titles=stream_titles)
+mv_mp3_to_icloud(df, stream_titles=stream_titles[0:2])
