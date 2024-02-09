@@ -1180,7 +1180,7 @@ def download_songs_from_streams(df, stream_titles=[], make_songs=True, make_play
                             rank = rank.replace("p","+")
                             if df.iloc[index]["rank"] == rank:
                                 new_song_name = get_stream_info(df_stream, "htmlID")[1:]+" "+" ".join(song_name.split(" ")[1:])
-                                os.system(f'ln -s "/home/tfillinger/Documents/marc/{stream_dir}/{song_name}.mp3" "mp3_playlists/{playlist_folder}/{new_song_name}.mp3"')
+                                os.system(f'ln -s "{stream_dir}/{song_name}.mp3" "mp3_playlists/{playlist_folder}/{new_song_name}.mp3"')
                                 print(f'Added mp3_playlists/{playlist_folder}/{new_song_name}.mp3.')
                 # print(f'{song_name} skipped.')
                 continue
@@ -1256,7 +1256,7 @@ def mv_thumbnail_to_icloud(df, stream_titles):
             print(f"{stream_title} thumbnail not found.")
 
 
-def mv_mp3_to_icloud(df, stream_titles):
+def mv_mp3_to_icloud(df, stream_titles, ranks):
     for stream_title in stream_titles:
         df_stream = df.query(f'live_title=="{stream_title}"')
         stream_title = format_stream_title(stream_title)
@@ -1269,10 +1269,11 @@ def mv_mp3_to_icloud(df, stream_titles):
             song_name = f'{k_song}. {df.iloc[index]["name"]}'.replace("/","")
             if os.path.exists(f"{stream_dir}/{song_name}.mp3"):
                 rank = df.iloc[index]["rank"]
-                if rank not in ["S", "A+", "A"]:
+                if rank not in ranks:
                     continue
+                os.makedirs(f"{icloud_dir}/{rank}", exist_ok=True)
 
                 new_song_name = get_stream_info(df_stream, "htmlID")[1:]+" "+" ".join(song_name.split(" ")[1:])
-                os.system(f'cp "/home/tfillinger/Documents/marc/{stream_dir}/{song_name}.mp3" "{icloud_dir}/{new_song_name}.mp3"')
-                change_mp3_metadata(f"{icloud_dir}/{new_song_name}.mp3", df.iloc[index]["name"], f"Marc Rebillet; tier {rank}", song.live_title, f"{k_song}/{len(df_stream)}", get_date_for_mp3(song.htmlID), song.genre, image_path=f"{icloud_dir}/thumbnails/{stream_title}.jpg")
-                print(f'Added {icloud_dir}/{new_song_name}.mp3.')
+                os.system(f'cp "{stream_dir}/{song_name}.mp3" "{icloud_dir}/{rank}/{new_song_name}.mp3"')
+                change_mp3_metadata(f"{icloud_dir}/{rank}/{new_song_name}.mp3", df.iloc[index]["name"], f"Marc Rebillet; tier {rank}", song.live_title, f"{k_song}/{len(df_stream)}", get_date_for_mp3(song.htmlID), song.genre, image_path=f"{icloud_dir}/thumbnails/{stream_title}.jpg")
+                print(f'Added {icloud_dir}/{rank}/{new_song_name}.mp3.')
