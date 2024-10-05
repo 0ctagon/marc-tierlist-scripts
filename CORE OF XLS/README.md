@@ -1,0 +1,1 @@
+Replace `core.py` of `xlsx2hmtl` package with this version. Allows to specify `row_range` (very ugly and hardcoded).

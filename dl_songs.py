@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from utils import *
+from downloading import *
 
 df = get_df_from_xls("marc_tw.xlsx", "Twitch")
 df = df.append(get_df_from_xls("marc_yt.xlsx", "YouTube"), ignore_index=True)

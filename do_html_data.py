@@ -1,30 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from utils import *
+from database import *
+import pandas as pd
 
-df = get_df_from_xls("marc_tw.xlsx", "Twitch")
-df = df.append(get_df_from_xls("marc_live.xlsx", "Live"), ignore_index=True)
-df = df.append(get_df_from_xls("marc_yt.xlsx", "YouTube"), ignore_index=True)
+dfFR = get_df_from_xls("marc_tw.xlsx", "Twitch")
+dfFR = pd.concat([dfFR, get_df_from_xls("marc_live.xlsx", "Live")], ignore_index=True)
+dfFR = pd.concat([dfFR, get_df_from_xls("marc_yt.xlsx", "YouTube")], ignore_index=True)
 
 dfEN = get_df_from_xls("marc_tw.xlsx", "Twitch", EN=True)
-dfEN = dfEN.append(get_df_from_xls("marc_live.xlsx", "Live", EN=True), ignore_index=True)
-dfEN = dfEN.append(get_df_from_xls("marc_yt.xlsx", "YouTube", EN=True), ignore_index=True)
+dfEN = pd.concat([dfEN, get_df_from_xls("marc_live.xlsx", "Live", EN=True)], ignore_index=True)
+dfEN = pd.concat([dfEN, get_df_from_xls("marc_yt.xlsx", "YouTube", EN=True)], ignore_index=True)
 
-if len(df) != len(dfEN):
-    print("IL MANQUE DES CHANSONS TRADUITES????????????/")
-    sys.quit()
+if len(dfFR) != len(dfEN):
+    raise Exception("Miss translation in the English database")
 
-df = get_unique_songID(df)
-dfEN = get_unique_songID(dfEN)
+for df_ in [dfFR, dfEN]:
+    df_ = get_unique_songID(df_)
 
-print_simple_stats(df)
-print_simple_stats(dfEN)
+    print_simple_stats(df_)
 
-output_html(df)
-output_html(dfEN, EN=True)
+    output_html(df_, EN=True if df_ is dfEN else False)
 
-output_database_JSON(df)
-output_database_JSON(dfEN, EN=True)
+    output_database_JSON(df_, EN=True if df_ is dfEN else False)
 
-make_html_tables(df)
-make_html_tables(dfEN, EN=True)
+    make_html_tables(df_, EN=True if df_ is dfEN else False)

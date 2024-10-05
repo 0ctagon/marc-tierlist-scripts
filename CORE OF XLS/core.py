@@ -21,21 +21,13 @@ from xlsx2html.utils.image import bytes_to_datauri
 def render_attrs(attrs):
     if not attrs:
         return ""
-    return " ".join(
-        ['%s="%s"' % a for a in sorted(attrs.items(), key=lambda a: a[0]) if a[1]]
-    )
+    return " ".join(['%s="%s"' % a for a in sorted(attrs.items(), key=lambda a: a[0]) if a[1]])
 
 
 def render_inline_styles(styles):
     if not styles:
         return ""
-    return ";".join(
-        [
-            "%s: %s" % a
-            for a in sorted(styles.items(), key=lambda a: a[0])
-            if a[1] is not None
-        ]
-    )
+    return ";".join(["%s: %s" % a for a in sorted(styles.items(), key=lambda a: a[0]) if a[1] is not None])
 
 
 def normalize_color(color):
@@ -154,7 +146,7 @@ def images_to_data(ws: Worksheet):
     return images_data
 
 
-def worksheet_to_data(ws, row_range=(None,None), locale=None, fs=None, default_cell_border="none"):
+def worksheet_to_data(ws, row_range=(None, None), locale=None, fs=None, default_cell_border="none"):
     merged_cell_map = {}
     if OPENPYXL_24:
         merged_cell_ranges = ws.merged_cell_ranges
@@ -162,12 +154,7 @@ def worksheet_to_data(ws, row_range=(None,None), locale=None, fs=None, default_c
     else:
         merged_cell_ranges = [cell_range.coord for cell_range in ws.merged_cells.ranges]
         excluded_cells = set(
-            [
-                cell
-                for cell_range in merged_cell_ranges
-                for rows in rows_from_range(cell_range)
-                for cell in rows
-            ]
+            [cell for cell_range in merged_cell_ranges for rows in rows_from_range(cell_range) for cell in rows]
         )
 
     for cell_range in merged_cell_ranges:
@@ -190,18 +177,19 @@ def worksheet_to_data(ws, row_range=(None,None), locale=None, fs=None, default_c
 
     data_list = []
     row_start, row_end = row_range
-    if row_start is None or row_end is None: row_range = False
+    if row_start is None or row_end is None:
+        row_range = False
     # print(row_range, row_start, row_end)
     for row_i, row in enumerate(ws.iter_rows()):
         if row_range:
-            if row_i >= row_start and row_i<= row_end:
+            if row_i >= row_start and row_i <= row_end:
                 pass
             else:
                 continue
         data_row = []
         data_list.append(data_row)
         for col_i, cell in enumerate(row):
-            if col_i >= 2 and col_i<=8:
+            if col_i >= 2 and col_i <= 8:
                 pass
             else:
                 continue
@@ -233,33 +221,32 @@ def worksheet_to_data(ws, row_range=(None,None), locale=None, fs=None, default_c
             merged_cell_info = merged_cell_map.get(cell.coordinate, {})
             if merged_cell_info:
                 cell_data["attrs"].update(merged_cell_info["attrs"])
-            cell_data["style"].update(
-                get_styles_from_cell(cell, merged_cell_info, default_cell_border)
-            )
+            cell_data["style"].update(get_styles_from_cell(cell, merged_cell_info, default_cell_border))
             data_row.append(cell_data)
 
     col_list = []
     max_col_number += 1
 
-    column_dimensions = sorted(
-        ws.column_dimensions.items(), key=lambda d: column_index_from_string(d[0])
-    )
+    column_dimensions = sorted(ws.column_dimensions.items(), key=lambda d: column_index_from_string(d[0]))
     # print(type(column_dimensions[0]))
 
-    custom_col_width = {"C": 120,
-                        "D": 64,
-                        "E": 135,
-                        "F": 82,
-                        "G": 82,
-                        "H": 194,
-                        "I": 158}
+    custom_col_width = {
+        "C": 120,
+        "D": 64,
+        "E": 135,
+        "F": 82,
+        "G": 82,
+        "H": 194,
+        "I": 158,
+    }
     # print(len(column_dimensions))
     # print(column_dimensions)
-    if len(column_dimensions) == 14: end_column = 8
-    elif len(column_dimensions) == 15: end_column = 9
+    if len(column_dimensions) == 14:
+        end_column = 8
+    elif len(column_dimensions) == 15:
+        end_column = 9
     else:
         end_column = 9
-        print(wtf)
     for col_i, col_dim in column_dimensions[2:end_column]:
         if not all([col_dim.min, col_dim.max]):
             continue
@@ -321,29 +308,27 @@ def render_table(data, append_headers, append_lineno):
             formatted_images = []
             for img in images:
                 styles = render_inline_styles(img["style"])
-                img_tag = (
-                    '<img width="{width}" height="{height}"'
-                    'style="{styles_str}"'
-                    'src="{src}"'
-                    "/>"
-                ).format(styles_str=styles, **img)
+                img_tag = ('<img width="{width}" height="{height}"' 'style="{styles_str}"' 'src="{src}"' "/>").format(
+                    styles_str=styles, **img
+                )
                 formatted_images.append(img_tag)
             custom_row_live = render_inline_styles(cell["style"])
-            custom_row_live = custom_row_live.replace("font-size: 14.0px","font-size: 18.2px")
-            custom_row_live = custom_row_live.replace("font-size: 11.0px","font-size: 14.0px")
+            custom_row_live = custom_row_live.replace("font-size: 14.0px", "font-size: 18.2px")
+            custom_row_live = custom_row_live.replace("font-size: 11.0px", "font-size: 14.0px")
             # custom_row_live = custom_row_live.replace("font-size: 12.0px","font-size: 13.0px") # For header
-            if "border-bottom-color:" == custom_row_live[:len("border-bottom-color:")]:
+            if "border-bottom-color:" == custom_row_live[: len("border-bottom-color:")]:
                 # custom_row_live = custom_row_live.replace("border-bottom-color:", "background-color: #FFFFFF; border-bottom-color:") # For header
-                custom_row_live = custom_row_live.replace("border-bottom-color:", "background-color: #A6A6A6; border-bottom-color:")
-            custom_row_live = custom_row_live.replace("background-color:", "font-family:Calibri, sans-serif; color: #000000; background-color:")
+                custom_row_live = custom_row_live.replace(
+                    "border-bottom-color:",
+                    "background-color: #A6A6A6; border-bottom-color:",
+                )
+            custom_row_live = custom_row_live.replace(
+                "background-color:",
+                "font-family:Calibri, sans-serif; color: #000000; background-color:",
+            )
             # print(custom_row_live)
             trow.append(
-                (
-                    '<td {attrs_str} style="{styles_str}">'
-                    "{formatted_images}"
-                    "{formatted_value}"
-                    "</td>"
-                ).format(
+                ('<td {attrs_str} style="{styles_str}">' "{formatted_images}" "{formatted_value}" "</td>").format(
                     attrs_str=render_attrs(cell["attrs"]),
                     styles_str=custom_row_live,
                     formatted_images="\n".join(formatted_images),
@@ -386,7 +371,7 @@ def get_sheet(wb, sheet):
 def xlsx2html(
     filepath,
     output=None,
-    row_range=(None,None),
+    row_range=(None, None),
     locale="en",
     sheet=None,
     parse_formula=False,
@@ -403,7 +388,11 @@ def xlsx2html(
         fs = get_sheet(fb, sheet)
 
     data = worksheet_to_data(
-        ws, row_range=row_range, locale=locale, fs=fs, default_cell_border=default_cell_border
+        ws,
+        row_range=row_range,
+        locale=locale,
+        fs=fs,
+        default_cell_border=default_cell_border,
     )
     html = render_data_to_html(data, append_headers, append_lineno)
 
