@@ -98,7 +98,9 @@ class Song:
             month=int(self.date_str[2:4]),
             day=int(self.date_str[4:6]),
         )
-        self.date_YM_DT = datetime.datetime(year=self.date_DT.year, month=self.date_DT.month, day=1)
+        self.date_YM_DT = datetime.datetime(
+            year=self.date_DT.year, month=self.date_DT.month, day=1
+        )
         self.name = self.format_name(name)
         self.tempo = self.format_tempo(tempo)
         self.comment = self.format_comment(comment)
@@ -164,7 +166,9 @@ class Song:
         """
         if (length not in [np.nan]) and len(length) > 3:
             if length[1] == "'":
-                return datetime.timedelta(minutes=int(length[0]), seconds=int(length[2] + length[3]))
+                return datetime.timedelta(
+                    minutes=int(length[0]), seconds=int(length[2] + length[3])
+                )
             elif length[2] == "'":
                 return datetime.timedelta(
                     minutes=int(length[0] + length[1]),
@@ -213,8 +217,7 @@ class Song:
         ]:
             return "Slow"
         else:
-            print(tempo, "not defined")
-            sys.exit()
+            raise ValueError(f"Unknown tempo: {tempo}")
 
     def format_comment(self, comment):
         """
@@ -339,7 +342,7 @@ class Song:
         return "-"
 
 
-def get_df_from_xls(xls_file, media, EN=False):
+def get_df_from_xls(xls_file, media=None, EN=False):
     """
     Extracts data from an Excel file and returns it as a pandas DataFrame.
 
@@ -354,6 +357,16 @@ def get_df_from_xls(xls_file, media, EN=False):
     """
     song_list = []
     date_set = False
+
+    if media is None:
+        if "yt" in xls_file:
+            media = "YouTube"
+        elif "tw" in xls_file:
+            media = "Twitch"
+        elif "live" in xls_file:
+            media = "Live"
+    elif media not in ["YouTube", "Twitch", "Live"]:
+        raise ValueError("media must be one of 'YouTube', 'Twitch', or 'Live'")
 
     # Load the workbook and select the appropriate sheet
     wrkbk = openpyxl.load_workbook(xls_file)
@@ -375,6 +388,9 @@ def get_df_from_xls(xls_file, media, EN=False):
                 line.append(np.nan)
             else:
                 line.append(cell.value)
+
+        # print(f"Reading line {n_line} : {line}")
+
         if row[2].value is not None:
             song_URL = row[2].hyperlink.target
 
@@ -435,6 +451,10 @@ def get_df_from_xls(xls_file, media, EN=False):
             )
         )
 
+    for song in song_list:
+        if song.name == "DELETETHISSONG":
+            song_list.remove(song)
+
     # Convert the list of Song objects to a DataFrame
     return pd.DataFrame([vars(v) for v in song_list])
 
@@ -449,15 +469,71 @@ def get_unique_songID(df):
     Returns:
     pd.DataFrame: The DataFrame with unique songIDs.
     """
-    print("\nMultiple songIDs format:")
+    print("\nChecking songIDs duplicates")
     songIDs = []
     for index, row in df.iterrows():
         songID = row["songID"]
         songIDs.append(songID)
         if songIDs.count(songID) > 1:
-            print(f"Multiple {songID} ({songIDs.count(songID)})")
+            print(f"\tMultiple {songID} ({songIDs.count(songID)})")
             df.at[index, "songID"] = songID + str(songIDs.count(songID))
     print("Done")
+    return df
+
+
+def get_unique_htmlID(df):
+    """
+    Ensures that each songID in the DataFrame is unique by appending a count to duplicate htmlID.
+
+    Parameters:
+    df (pd.DataFrame): The DataFrame.
+
+    Returns:
+    pd.DataFrame: The DataFrame with unique htmlIDs.
+    """
+    print("\nChecking htmlIDs duplicates")
+    df_gb = (
+        df[["live_title", "htmlID"]]
+        .groupby(["live_title", "htmlID"])
+        .size()
+        .reset_index(name="count")
+    )
+    htmlIDs = []
+    live_to_update = []
+    for index, row in df_gb.iterrows():
+        htmlIDs.append(row["htmlID"])
+        if htmlIDs.count(row["htmlID"]) > 1:
+            print(
+                f"\tMultiple {row['htmlID']} for {row['live_title']} ({htmlIDs.count(row['htmlID'])})"
+            )
+            df_gb.at[index, "htmlID"] = row["htmlID"] + chr(
+                64 + htmlIDs.count(row["htmlID"])
+            )
+            live_to_update.append(row["live_title"])
+    for index, row in df.iterrows():
+        for index_gb, row_gb in df_gb.iterrows():
+            if (
+                row["live_title"] == row_gb["live_title"]
+                and row["htmlID"] != row_gb["htmlID"]
+                and row["live_title"] in live_to_update
+            ):
+                df.at[index, "htmlID"] = row_gb["htmlID"]
+    print("Done")
+    return df
+
+
+def get_unique_IDs(df):
+    """
+    Ensures that each songID and htmlID in the DataFrame is unique by appending a count to duplicate IDs.
+
+    Parameters:
+    df (pd.DataFrame): The DataFrame containing song data with "songID" and "htmlID" columns.
+
+    Returns:
+    pd.DataFrame: The DataFrame with unique songIDs and htmlIDs.
+    """
+    df = get_unique_songID(df)
+    df = get_unique_htmlID(df)
     return df
 
 
@@ -485,15 +561,24 @@ def print_simple_stats(df):
     num_streams = len(df.groupby("htmlID"))
     total_length = df["length_DT"].sum()
     avg_length_per_stream = total_length / num_streams
-    longest_stream_length = df[["length_DT", "htmlID"]].groupby("htmlID").sum().max().iloc[0]
-    longest_stream_title = df[["length_DT", "live_title"]].groupby("live_title").sum().idxmax().iloc[0]
-    longest_stream_htmlID = df[["length_DT", "htmlID"]].groupby("htmlID").sum().idxmax().iloc[0]
+    print(avg_length_per_stream)
+    longest_stream_length = (
+        df[["length_DT", "htmlID"]].groupby("htmlID").sum().max().iloc[0]
+    )
+    longest_stream_title = (
+        df[["length_DT", "live_title"]].groupby("live_title").sum().idxmax().iloc[0]
+    )
+    longest_stream_htmlID = (
+        df[["length_DT", "htmlID"]].groupby("htmlID").sum().idxmax().iloc[0]
+    )
 
     print(f"\nNumber of Live Streams done: {num_streams} streams")
     print(f"Total music ranked: {len(df)} songs")
     print(f"Total music length ranked: {str(total_length)}\n")
     print(f"Average music time per streams: {str(avg_length_per_stream)[7:15]}")
-    print(f"Longest music time for a stream: {str(longest_stream_length)[7:15]}, {longest_stream_title}")
+    print(
+        f"Longest music time for a stream: {str(longest_stream_length)[7:15]}, {longest_stream_title}"
+    )
     if longest_stream_htmlID != "s201209":
         print("NEW RECORD!\n")
     else:
@@ -505,25 +590,35 @@ def print_simple_stats(df):
     longest_song_name = df.loc[df["length_DT"].idxmax()]["name"]
 
     print(f"Average song length: {str(avg_song_length)[7:15]}")
-    print(f"Longest song length: {str(longest_song_length)[7:15]} with {longest_song_name}\n")
+    print(
+        f"Longest song length: {str(longest_song_length)[7:15]} with {longest_song_name}\n"
+    )
 
     # Print song count per stream statistics
     avg_songs_per_stream = len(df) / num_streams
-    max_songs_per_stream = df[["length_DT", "live_title"]].groupby("live_title").size().max()
-    max_songs_stream_title = df[["length_DT", "live_title"]].groupby("live_title").size().idxmax()
+    max_songs_per_stream = (
+        df[["length_DT", "live_title"]].groupby("live_title").size().max()
+    )
+    max_songs_stream_title = (
+        df[["length_DT", "live_title"]].groupby("live_title").size().idxmax()
+    )
 
     print(f"Average number of songs per stream: {avg_songs_per_stream:.2f} songs")
-    print(f"Highest number of songs for a stream: {max_songs_per_stream} songs, {max_songs_stream_title}")
+    print(
+        f"Highest number of songs for a stream: {max_songs_per_stream} songs, {max_songs_stream_title}"
+    )
     if longest_stream_htmlID != "s180211":
         print("NEW RECORD!\n")
     else:
         print()
 
     # Print estimated remaining statistics
-    estimated_live_left = 108 - num_streams
+    estimated_live_left = 108 + 25 - num_streams
     estimated_songs_left = estimated_live_left * avg_songs_per_stream
     estimated_length_left = estimated_live_left * avg_length_per_stream
 
     print(f"Number of Live Stream left to rank (estimation): {estimated_live_left}")
     print(f"Number of songs left to rank (estimation): {estimated_songs_left:.0f}")
-    print(f"Total music length left to rank (estimation): {str(estimated_length_left)[7:15]}\n")
+    print(
+        f"Total music length left to rank (estimation): {str(estimated_length_left)}\n"
+    )

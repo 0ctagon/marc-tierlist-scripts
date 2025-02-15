@@ -169,9 +169,11 @@ cython_debug/
 *.txt
 *.json
 *.htm
-*.xlsx
+*.xls*
 *.webm.part
+data/
 test/
 saved/
 old_scripts/
 *.jpg
+magic*

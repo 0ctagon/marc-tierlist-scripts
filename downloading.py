@@ -73,8 +73,12 @@ def get_twitch_timing(formatted_timing):
     int: The total time in seconds.
     """
     hours = int(formatted_timing[: formatted_timing.index("h")])
-    minutes = int(formatted_timing[formatted_timing.index("h") + 1 : formatted_timing.index("m")])
-    seconds = int(formatted_timing[formatted_timing.index("m") + 1 : formatted_timing.index("s")])
+    minutes = int(
+        formatted_timing[formatted_timing.index("h") + 1 : formatted_timing.index("m")]
+    )
+    seconds = int(
+        formatted_timing[formatted_timing.index("m") + 1 : formatted_timing.index("s")]
+    )
     return hours * 60 * 60 + minutes * 60 + seconds
 
 
@@ -199,7 +203,9 @@ def change_mp3_metadata(
 
 
 # TODO: this thing needs refactoring
-def download_songs_from_streams(df, stream_titles=[], make_songs=True, make_playlist_rank=None):
+def download_songs_from_streams(
+    df, stream_titles=[], make_songs=True, make_playlist_rank=None
+):
     """
     Downloads songs from specified streams and processes them into individual MP3 files.
 
@@ -238,14 +244,20 @@ def download_songs_from_streams(df, stream_titles=[], make_songs=True, make_play
                     "Live",
                 ]:  # TODO: Change if Live also on Twitch (soon)
                     # YouTube(live_first_url, on_progress_callback=on_progress).streams.filter(only_audio=True).order_by('abr').desc().first().download(filename=f"{stream_title}.webm")
-                    os.system(f'yt-dlp -f "ba" -o "{stream_title}.webm" --force-overwrites "{live_code}"')
+                    os.system(
+                        f'yt-dlp -f "ba" -o "{stream_title}.webm" --force-overwrites "{live_code}"'
+                    )
                 else:
-                    os.system(f'twitch-dl download "{live_first_url}" -q audio_only -o "{stream_title}.mkv"')
+                    os.system(
+                        f'twitch-dl download "{live_first_url}" -q audio_only -o "{stream_title}.mkv"'
+                    )
                 print(f"{stream_title} DL.")
 
         # Move the downloaded file to the stream directory if not already there
         if not os.path.exists(f"{stream_dir}/{stream_title}.{file_format}"):
-            os.system(f'mv "{stream_title}.{file_format}" "{stream_dir}/{stream_title}.{file_format}"')
+            os.system(
+                f'mv "{stream_title}.{file_format}" "{stream_dir}/{stream_title}.{file_format}"'
+            )
             print(f"{stream_title} correctly moved.")
 
         k_song = 0
@@ -286,12 +298,16 @@ def download_songs_from_streams(df, stream_titles=[], make_songs=True, make_play
                             rank = rank.replace("p", "+")
                             if df.iloc[index]["rank"] == rank:
                                 new_song_name = (
-                                    get_stream_info(df_stream, "htmlID")[1:] + " " + " ".join(song_name.split(" ")[1:])
+                                    get_stream_info(df_stream, "htmlID")[1:]
+                                    + " "
+                                    + " ".join(song_name.split(" ")[1:])
                                 )
                                 os.system(
                                     f'ln -s "{stream_dir}/{song_name}.mp3" "mp3_playlists/{playlist_folder}/{new_song_name}.mp3"'
                                 )
-                                print(f"Added mp3_playlists/{playlist_folder}/{new_song_name}.mp3.")
+                                print(
+                                    f"Added mp3_playlists/{playlist_folder}/{new_song_name}.mp3."
+                                )
                 # print(f'{song_name} skipped.')
                 continue
 
@@ -311,7 +327,9 @@ def download_songs_from_streams(df, stream_titles=[], make_songs=True, make_play
                 if stream_media in ["YouTube", "Live"]:
                     end_time = get_youtube_timing(next_song["URL"])
                 else:
-                    end_time = get_twitch_timing(next_song["URL"][next_song["URL"].index("t=") + 2 :])
+                    end_time = get_twitch_timing(
+                        next_song["URL"][next_song["URL"].index("t=") + 2 :]
+                    )
             else:
                 end_time = start_time + song.length_DT.seconds + 3
 
@@ -415,7 +433,9 @@ def mv_thumbnail_to_icloud(df, stream_titles):
 
         # Check if the thumbnail exists and move it to the iCloud directory
         if os.path.exists(f"{stream_dir}/{stream_title}.jpg"):
-            os.system(f'cp "{stream_dir}/{stream_title}.jpg" "{icloud_dir}/thumbnails/{stream_title}.jpg"')
+            os.system(
+                f'cp "{stream_dir}/{stream_title}.jpg" "{icloud_dir}/thumbnails/{stream_title}.jpg"'
+            )
             print(f"{stream_title} thumbnail moved.")
         else:
             print(f"{stream_title} thumbnail not found.")
@@ -450,8 +470,14 @@ def mv_mp3_to_icloud(df, stream_titles, ranks):
                     continue
                 os.makedirs(f"{icloud_dir}/{rank}", exist_ok=True)
 
-                new_song_name = get_stream_info(df_stream, "htmlID")[1:] + " " + " ".join(song_name.split(" ")[1:])
-                os.system(f'cp "{stream_dir}/{song_name}.mp3" "{icloud_dir}/{rank}/{new_song_name}.mp3"')
+                new_song_name = (
+                    get_stream_info(df_stream, "htmlID")[1:]
+                    + " "
+                    + " ".join(song_name.split(" ")[1:])
+                )
+                os.system(
+                    f'cp "{stream_dir}/{song_name}.mp3" "{icloud_dir}/{rank}/{new_song_name}.mp3"'
+                )
                 change_mp3_metadata(
                     f"{icloud_dir}/{rank}/{new_song_name}.mp3",
                     df.iloc[index]["name"],

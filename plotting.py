@@ -16,7 +16,7 @@ rank_list = ["S", "A+", "A", "B+", "B", "C+", "C", "D"]
 custom_colors = [
     (255 / 255, 99 / 255, 71 / 255),
     (128 / 255, 54 / 255, 255 / 255),
-    (70 / 255, 130 / 255, 180 / 255),
+    (0 / 255, 180 / 255, 160 / 255),
 ]
 
 
@@ -32,13 +32,19 @@ def make_length_plot(df, plot_type="timing"):
     df["length_seconds"] = df["length_DT"].dt.seconds % 60
 
     if plot_type == "timing":
-        grouped = df[["length_minutes", "length_seconds", "date_YM_DT"]].groupby("date_YM_DT").mean()
+        grouped = (
+            df[["length_minutes", "length_seconds", "date_YM_DT"]]
+            .groupby("date_YM_DT")
+            .mean()
+        )
         ylabel = "Mean song length / stream (min)"
         output_file = "plots/live_song_length.png"
     else:
         grouped = (
             df[["date_YM_DT", "length_DT"]].groupby("date_YM_DT").sum()
-            / df.drop_duplicates("htmlID")[["date_YM_DT", "length_DT"]].groupby("date_YM_DT").count()
+            / df.drop_duplicates("htmlID")[["date_YM_DT", "length_DT"]]
+            .groupby("date_YM_DT")
+            .count()
         )
         grouped["length_minutes"] = grouped["length_DT"].dt.seconds // 60
         grouped["length_seconds"] = grouped["length_DT"].dt.seconds % 60
@@ -48,9 +54,9 @@ def make_length_plot(df, plot_type="timing"):
     grouped = grouped.reset_index()
     grouped["date_YM_DT"] = grouped["date_YM_DT"].dt.strftime("%Y-%m-%d")
     dates = pd.to_datetime(grouped["date_YM_DT"])
-    normalized_lengths = (grouped["length_minutes"] - grouped["length_minutes"].min()) / (
-        grouped["length_minutes"].max() - grouped["length_minutes"].min()
-    )
+    normalized_lengths = (
+        grouped["length_minutes"] - grouped["length_minutes"].min()
+    ) / (grouped["length_minutes"].max() - grouped["length_minutes"].min())
     colormap = plt.cm.YlOrRd
 
     fig, ax = plt.subplots(figsize=(7, 5))
@@ -104,7 +110,9 @@ def make_count_plot(df):
     """
     grouped = (
         df[["date_YM_DT", "songID"]].groupby("date_YM_DT").count()
-        / df.drop_duplicates("htmlID")[["date_YM_DT", "songID"]].groupby("date_YM_DT").count()
+        / df.drop_duplicates("htmlID")[["date_YM_DT", "songID"]]
+        .groupby("date_YM_DT")
+        .count()
     )
     ylabel = "Mean song number / stream"
     output_file = "plots/live_song_number.png"
@@ -155,12 +163,16 @@ def make_livetype_plot(df):
 
     # Format dates
     for media in media_types:
-        grouped[media]["date_YM_DT"] = grouped[media]["date_YM_DT"].dt.strftime("%Y-%m-%d")
+        grouped[media]["date_YM_DT"] = grouped[media]["date_YM_DT"].dt.strftime(
+            "%Y-%m-%d"
+        )
 
     # Combine the date columns of all groups and take unique values
     dates = pd.concat([grouped[media]["date_YM_DT"] for media in media_types]).unique()
     dates_for_plot = pd.to_datetime(dates)
-    widths = [calendar.monthrange(date.year, date.month)[1] - 7 for date in dates_for_plot]
+    widths = [
+        calendar.monthrange(date.year, date.month)[1] - 7 for date in dates_for_plot
+    ]
 
     # Create arrays to store the stream counts for each media type
     songs = {media: [] for media in media_types}
@@ -169,7 +181,11 @@ def make_livetype_plot(df):
     for date in dates:
         for media in media_types:
             if date in grouped[media]["date_YM_DT"].values:
-                songs[media].append(grouped[media][grouped[media]["date_YM_DT"] == date]["htmlID"].iloc[0])
+                songs[media].append(
+                    grouped[media][grouped[media]["date_YM_DT"] == date]["htmlID"].iloc[
+                        0
+                    ]
+                )
             else:
                 songs[media].append(0)
 
@@ -240,7 +256,9 @@ def make_rank_plots(df, rank="high"):
         .query(query)
         .groupby(["date_YM_DT", "when_ranked_YM_DT"])
         .count()
-        / df[["date_YM_DT", "when_ranked_YM_DT", "rank"]].groupby(["date_YM_DT", "when_ranked_YM_DT"]).count()
+        / df[["date_YM_DT", "when_ranked_YM_DT", "rank"]]
+        .groupby(["date_YM_DT", "when_ranked_YM_DT"])
+        .count()
     )
 
     df = df[["date_YM_DT", "when_ranked_YM_DT"]]
@@ -256,7 +274,9 @@ def make_rank_plots(df, rank="high"):
     df["when_ranked_YM_DT"] = df["when_ranked_YM_DT"].dt.strftime("%Y-%m")
 
     # Pivot the filtered DataFrame to create a 2D grid for the heatmap
-    pivot_df = df.pivot_table(index="when_ranked_YM_DT", columns="date_YM_DT", values="rank")
+    pivot_df = df.pivot_table(
+        index="when_ranked_YM_DT", columns="date_YM_DT", values="rank"
+    )
 
     # Set up the plot
     fig, ax = plt.subplots(figsize=(23, 9))
@@ -373,7 +393,9 @@ def make_rank_length_streamtype(df):
     for rank in rank_list:
         rank_values = []
         for media in ["YouTube", "Twitch", "Live"]:
-            rank_values.append(df.query(f"rank == '{rank}' and media =='{media}' ")["length_DT"].mean())
+            rank_values.append(
+                df.query(f"rank == '{rank}' and media =='{media}' ")["length_DT"].mean()
+            )
         values.append(rank_values)
 
     # Assign colors for each category

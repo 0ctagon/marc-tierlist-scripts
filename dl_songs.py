@@ -3,11 +3,11 @@
 from utils import *
 from downloading import *
 
-df = get_df_from_xls("marc_tw.xlsx", "Twitch")
-df = df.append(get_df_from_xls("marc_yt.xlsx", "YouTube"), ignore_index=True)
-df = df.append(get_df_from_xls("marc_live.xlsx", "Live"), ignore_index=True)
+df = get_df_from_xls("marc_tw.xlsm", "Twitch")
+df = df.append(get_df_from_xls("marc_yt.xlsm", "YouTube"), ignore_index=True)
+df = df.append(get_df_from_xls("marc_live.xlsm", "Live"), ignore_index=True)
 
-df = get_unique_songID(df)
+df = get_unique_IDs(df)
 
 # download_songs_from_streams(df, stream_titles=["Music Break No. 4 | Bored Certified"])
 # download_songs_from_streams(df, stream_titles=["I'm feeling it.", "HARRY MACK IS ON THE STREAM"])

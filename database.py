@@ -1,5 +1,11 @@
 from xlsx2html import xlsx2html
 from bs4 import BeautifulSoup
+import json
+from pythumb import Thumbnail
+import subprocess
+from magic import *
+import os
+import yaml
 
 num_to_months = {
     1: "Janvier",
@@ -50,6 +56,14 @@ css_colors_dict = {
     "#A6A6A6": "D_rank",
 }
 
+tempo_txt_dict = {
+    "Med": "medium",
+    "Fast": "fast",
+    "Slow": "slow",
+    "Fmed": "medium fast",
+    "Smed": "medium slow",
+}
+
 
 def get_date_verbose(date_DT, EN=False):
     """
@@ -85,30 +99,6 @@ def get_date_verbose(date_DT, EN=False):
     return f"{date_DT.day}{suffix} {num_to_months_used[date_DT.month]} {date_DT.year}"
 
 
-def get_ranked_date_prompt(date_DT, EN=False):
-    """
-    Returns a prompt string indicating the ranked date in either English or another language.
-
-    Parameters:
-    date_DT (datetime.datetime): The date to be formatted.
-    EN (bool): A flag to determine if the prompt should be in English.
-               If False, uses the default language.
-
-    Returns:
-    str: The formatted prompt string.
-    """
-    # Select the appropriate month mapping and prompt based on the language flag
-    if EN:
-        num_to_months_used = num_to_months_EN
-        prompt = "Ranked around"
-    else:
-        num_to_months_used = num_to_months
-        prompt = "Noté vers"
-
-    # Return the formatted prompt string
-    return f"{prompt} {num_to_months_used[date_DT.month]} {date_DT.year}"
-
-
 def get_live_code(url):
     """
     Extracts the live code from a given URL.
@@ -132,6 +122,174 @@ def get_live_code(url):
         live_code = live_code[: live_code.index("t=") - 1]
 
     return live_code
+
+
+def get_date_short(htmlID):
+    """
+    Extracts the date string from the htmlID based on the media type.
+
+    Parameters:
+    htmlID (str): The htmlID of the song.
+
+    Returns:
+    str: The extracted date string.
+    """
+    if any(char.isupper() for char in htmlID):
+        # Remove uppercase letters from htmlID
+        htmlID = "".join(char for char in htmlID if not char.isupper())
+
+    if "l" in htmlID or "t" in htmlID:
+        date = htmlID[1:-1]
+    else:
+        date = htmlID[1:]
+    date = "20" + date[:2] + "-" + date[2:4] + "-" + date[4:]
+    return date
+
+
+def output_newdatabase_JSON(df, EN=False):
+    """
+    Generates a JSON representation of the song database and writes it to a file.
+
+    Parameters:
+    df (pd.DataFrame): The DataFrame containing song data.
+    EN (bool): A flag to determine if the JSON file should be in English.
+               If False, uses French.
+
+    Writes:
+    JSON content to a file named 'newdatabase.json' or 'EN_newdatabase.json' based on the language flag.
+    """
+
+    albums = []
+    current_live = {"title": None}
+
+    # Iterate through each song in the DataFrame and generate JSON content
+    for n_song, song in enumerate(df.itertuples()):
+        new_live_title = song.live_title
+        if new_live_title != current_live["title"]:
+            print(f"Processing new live: {new_live_title}")
+            if current_live.get("title") is not None:
+                albums.append(current_live)
+
+            current_live = {
+                "id": song.htmlID,
+                "title": song.live_title,
+                "date": get_date_verbose(song.date_DT, EN),
+                "date_DT": song.date_DT,
+                "date_short": get_date_short(song.htmlID),
+                "when_ranked": get_date_verbose(song.when_ranked_DT, EN),
+                "comment": song.live_comment,
+                "picture_link": None,
+                "songs": [],
+            }
+
+            # If the thumbnail is not in data/thumbnails.yaml, update the htmlID : picture_link in the file
+            with open("data/thumbnails.yaml", "r") as f:
+                thumbnails = yaml.safe_load(f)
+
+            if song.htmlID not in thumbnails:
+                if "twitch" in song.URL:
+                    current_live["picture_link"] = subprocess.run(
+                        [
+                            "youtube-dl",
+                            "--get-thumbnail",
+                            song.URL,
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    ).stdout
+                else:
+                    current_live["picture_link"] = Thumbnail(
+                        f"https://www.youtube.com/watch?v={get_live_code(song.URL)}"
+                    ).fetch(url=True)
+
+                thumbnails[song.htmlID] = current_live["picture_link"]
+                with open("data/thumbnails.yaml", "w") as f:
+                    yaml.dump(thumbnails, f)
+
+            current_live["picture_link"] = thumbnails[song.htmlID]
+
+        current_live["songs"].append(
+            {
+                "name": song.name,
+                "rank": song.rank,
+                "genre": song.genre,
+                "length": song.length,
+                "tempo": tempo_txt_dict[song.tempo],
+                "comment": song.comment,
+                "choree": song.choral,
+                "url": song.URL,
+            }
+        )
+
+    if current_live is not None:
+        albums.append(current_live)
+
+    # Sort albums by date
+    albums = sorted(albums, key=lambda x: x["date_DT"])
+
+    # remove date_DT
+    for album in albums:
+        del album["date_DT"]
+
+    albums.reverse()
+
+    data = {"albums": albums}
+
+    # Write the generated JSON content to the database file
+    os.makedirs(folder, exist_ok=True)
+    if EN:
+        with open(database_en, "w") as f:
+            json.dump(data, f, indent=4)
+        print(f"Database saved to {database_en}")
+    else:
+        with open(database_fr, "w") as f:
+            json.dump(data, f, indent=4)
+        print(f"Database saved to {database_fr}")
+
+
+def get_HOF_info(songsName, df):
+    HOF_info = []
+
+    for songName in songsName:
+        found = False
+        print(f"Searching for {songName}")
+        for n_song, song in enumerate(df.itertuples()):
+            if song.name == songName:
+                HOF_info.append((song.htmlID, song.name))
+                found = True
+        if not found:
+            HOF_info.append(f"{songName} not found in the database")
+    for info in HOF_info:
+        print(info)
+    return HOF_info
+
+
+#### OLD FUNCTIONS, kept for legacy
+
+
+def get_ranked_date_prompt(date_DT, EN=False):
+    """
+    Returns a prompt string indicating the ranked date in either English or another language.
+
+    Parameters:
+    date_DT (datetime.datetime): The date to be formatted.
+    EN (bool): A flag to determine if the prompt should be in English.
+               If False, uses the default language.
+
+    Returns:
+    str: The formatted prompt string.
+    """
+    # Select the appropriate month mapping and prompt based on the language flag
+    if EN:
+        num_to_months_used = num_to_months_EN
+        prompt = "Ranked around"
+    else:
+        num_to_months_used = num_to_months
+        prompt = "Noté vers"
+
+    # Return the formatted prompt string
+    return f"{prompt} {num_to_months_used[date_DT.month]} {date_DT.year}"
 
 
 def output_html(df, EN=False):
@@ -168,9 +326,7 @@ def output_html(df, EN=False):
         for live in df_media.itertuples():
             parallax_line += f".parallax{live.htmlID}, "
             if media == "Twitch":
-                parallax_bg_lines += (
-                    f'\t\t\t.parallax{live.htmlID} {{background-image:url("thumbnails/tw/{live.htmlID}.jpg");}}\n'
-                )
+                parallax_bg_lines += f'\t\t\t.parallax{live.htmlID} {{background-image:url("thumbnails/tw/{live.htmlID}.jpg");}}\n'
             else:
                 parallax_bg_lines += f'\t\t\t.parallax{live.htmlID} {{background-image:url("https://i.ytimg.com/vi/{get_live_code(live.URL)}/maxresdefault.jpg");}}\n'
 
@@ -372,7 +528,9 @@ def make_html_tables(df, EN=False):
 
             # Update table cell styles and IDs
             for td in td_elements:
-                td["id"] = css_colors_dict[get_style_info(td["style"], "background-color")]
+                td["id"] = css_colors_dict[
+                    get_style_info(td["style"], "background-color")
+                ]
                 td["style"] = f"height: {get_style_info(td['style'], 'height')}"
 
             # Write the updated HTML content to the file
